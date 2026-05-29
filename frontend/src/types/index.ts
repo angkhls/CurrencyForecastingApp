@@ -1,4 +1,7 @@
-export type CurrencyCode = "USD" | "EUR" | "RUB";
+export type CurrencyCode = "USD" | "EUR" | "RUB" | "CNY";
+export type CurrencyPair = "USD_BYN" | "EUR_BYN" | "EUR_USD";
+export type ForecastMethod = "sarimax" | "gemini";
+export type PeriodPreset = "day" | "week" | "month" | "year" | "all";
 
 export interface CurrencyRate {
   currency: CurrencyCode;
@@ -9,11 +12,79 @@ export interface CurrencyRate {
 export interface ForecastPoint {
   date: string;
   predicted_value: number;
+  lower?: number | null;
+  upper?: number | null;
 }
 
 export interface ForecastResult {
-  currency: CurrencyCode;
+  pair: CurrencyPair;
+  method: ForecastMethod;
   forecast: ForecastPoint[];
+  mape?: number | null;
+  rmse?: number | null;
+}
+
+export interface ChartPoint {
+  date: string;
+  rate: number;
+  sma_20?: number | null;
+  ema_20?: number | null;
+}
+
+export interface ChartData {
+  pair: CurrencyPair;
+  period: PeriodPreset;
+  points: ChartPoint[];
+  levels: { support: number; resistance: number };
+}
+
+export interface ModelMetrics {
+  pair: CurrencyPair;
+  method: ForecastMethod;
+  mape: number;
+  rmse: number;
+  holdout_days: number;
+}
+
+export interface DashboardRate {
+  currency: CurrencyCode;
+  rate: number;
+  date: string;
+  change_pct?: number | null;
+}
+
+export interface DashboardResponse {
+  rates: DashboardRate[];
+}
+
+export interface ConvertResult {
+  amount: number;
+  from_currency: CurrencyCode;
+  to_currency: CurrencyCode;
+  rate: number;
+  result: number;
+  date: string;
 }
 
 export type AllLatestRates = Record<CurrencyCode, CurrencyRate | null>;
+
+export const PAIR_LABELS: Record<CurrencyPair, string> = {
+  USD_BYN: "USD / BYN",
+  EUR_BYN: "EUR / BYN",
+  EUR_USD: "EUR / USD",
+};
+
+export const CURRENCY_FLAGS: Record<CurrencyCode, string> = {
+  USD: "🇺🇸",
+  EUR: "🇪🇺",
+  RUB: "🇷🇺",
+  CNY: "🇨🇳",
+};
+
+export const PERIOD_LABELS: Record<PeriodPreset, string> = {
+  day: "День",
+  week: "Неделя",
+  month: "Месяц",
+  year: "Год",
+  all: "Всё время",
+};
