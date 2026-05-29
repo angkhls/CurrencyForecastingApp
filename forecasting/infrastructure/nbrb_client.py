@@ -13,10 +13,11 @@ from domain.models import CurrencyRate, CurrencyCode
 # ─────────────────────────────────────────────
 
 # Маппинг: наш код валюты → числовой ID в системе NBRB
-NBRB_CURRENCY_IDS: dict[CurrencyCode, int] = {
+NBRB_CURRENCY_IDS: dict[str, int] = {
     "USD": 431,
     "EUR": 451,
     "RUB": 456,
+    "CNY": 462,
 }
 
 
@@ -60,13 +61,12 @@ class NbrbApiClient:
         response.raise_for_status()  # бросит исключение если не 200 OK
 
         data = response.json()
-
-        # Преобразуем ответ NBRB → нашу сущность CurrencyRate
-        # NBRB возвращает: {"Cur_ID": 431, "Date": "2024-01-15", "Cur_OfficialRate": 3.2541}
+        # Cur_Scale: для RUB курс за 100 ед., для CNY за 10 — нормализуем к 1 единице
+        scale = data.get("Cur_Scale", 1) or 1
         return CurrencyRate(
             currency=currency,
             date=target_date,
-            rate=data["Cur_OfficialRate"]
+            rate=data["Cur_OfficialRate"] / scale,
         )
 
     async def get_rates_for_period(
@@ -98,9 +98,8 @@ class NbrbApiClient:
         return [
             CurrencyRate(
                 currency=currency,
-                # берём только дату, отрезаем время "T00:00:00"
                 date=date.fromisoformat(item["Date"][:10]),
-                rate=item["Cur_OfficialRate"]
+                rate=item["Cur_OfficialRate"] / (item.get("Cur_Scale", 1) or 1),
             )
             for item in data
         ]

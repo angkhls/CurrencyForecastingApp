@@ -1,51 +1,83 @@
-from pydantic import BaseModel
 from datetime import date
-from typing import List, Literal
+from typing import List, Literal, Optional
 
-# ─────────────────────────────────────────────
-# СУЩНОСТИ (Entities) — описывают данные нашей
-# предметной области. Не знают ничего о БД или API.
-# ─────────────────────────────────────────────
+from pydantic import BaseModel, Field
 
-# Поддерживаемые валюты
-CurrencyCode = Literal["USD", "EUR", "RUB"]
+CurrencyCode = Literal["USD", "EUR", "RUB", "CNY"]
+CurrencyPair = Literal["USD_BYN", "EUR_BYN", "EUR_USD"]
+ForecastMethod = Literal["sarimax", "gemini"]
+PeriodPreset = Literal["day", "week", "month", "year", "all"]
 
 
 class CurrencyRate(BaseModel):
-    """
-    Сущность: один курс валюты на конкретную дату.
-    Это основная единица данных в системе.
-    """
-    currency: CurrencyCode   # код валюты (USD, EUR, RUB)
-    date: date               # дата курса
-    rate: float              # курс относительно BYN
+    currency: CurrencyCode
+    date: date
+    rate: float
 
 
 class ForecastPoint(BaseModel):
-    """
-    Сущность: одна точка прогноза.
-    Содержит предсказанный курс на будущую дату.
-    """
-    date: date               # дата прогноза
-    predicted_value: float   # предсказанный курс
+    date: date
+    predicted_value: float
+    lower: Optional[float] = None
+    upper: Optional[float] = None
 
 
 class ForecastResult(BaseModel):
-    """
-    Value Object: результат прогноза целиком.
-    Объединяет список точек прогноза для одной валюты.
-    Value Object — неизменяемый, идентифицируется
-    по значению, а не по ID.
-    """
-    currency: CurrencyCode
+    pair: CurrencyPair
+    method: ForecastMethod
     forecast: List[ForecastPoint]
+    mape: Optional[float] = Field(None, description="MAPE на holdout, %")
+    rmse: Optional[float] = Field(None, description="RMSE на holdout")
 
 
-class RateHistory(BaseModel):
-    """
-    Value Object: исторические данные по валюте.
-    Используется для передачи истории курсов
-    в сервис прогнозирования.
-    """
+class ChartPoint(BaseModel):
+    date: date
+    rate: float
+    sma_20: Optional[float] = None
+    ema_20: Optional[float] = None
+
+
+class TechnicalLevels(BaseModel):
+    support: float
+    resistance: float
+
+
+class ChartData(BaseModel):
+    pair: CurrencyPair
+    period: PeriodPreset
+    points: List[ChartPoint]
+    levels: TechnicalLevels
+
+
+class ModelMetrics(BaseModel):
+    pair: CurrencyPair
+    method: ForecastMethod
+    mape: float
+    rmse: float
+    holdout_days: int
+
+
+class ConvertRequest(BaseModel):
+    amount: float = Field(gt=0)
+    from_currency: CurrencyCode
+    to_currency: CurrencyCode
+
+
+class ConvertResult(BaseModel):
+    amount: float
+    from_currency: CurrencyCode
+    to_currency: CurrencyCode
+    rate: float
+    result: float
+    date: date
+
+
+class DashboardRate(BaseModel):
     currency: CurrencyCode
-    rates: List[CurrencyRate]
+    rate: float
+    date: date
+    change_pct: Optional[float] = None
+
+
+class DashboardResponse(BaseModel):
+    rates: List[DashboardRate]

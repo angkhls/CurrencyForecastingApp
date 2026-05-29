@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import date, timedelta
 from typing import List
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from domain.models import CurrencyRate, CurrencyCode, ForecastPoint, ForecastResult
+from domain.models import CurrencyRate, ForecastPoint
 
 # ─────────────────────────────────────────────
 # ПАТТЕРН: Strategy (Стратегия)
@@ -91,15 +91,23 @@ class SARIMAXForecaster(BaseForecast):
         )
         result = model.fit(disp=False)
 
-        # Шаг 3: прогноз на days шагов вперёд
-        predictions = result.forecast(steps=days)
+        forecast_res = result.get_forecast(steps=days)
+        predictions = forecast_res.predicted_mean
+        conf_int = forecast_res.conf_int(alpha=0.2)
 
-        # Шаг 4: строим список ForecastPoint
         last_date = rates[-1].date
-        return [
-            ForecastPoint(
-                date=last_date + timedelta(days=i + 1),
-                predicted_value=round(float(val), 4)
+        points: list[ForecastPoint] = []
+        for i, val in enumerate(predictions):
+            lower = upper = None
+            if conf_int is not None and len(conf_int) > i:
+                lower = round(float(conf_int.iloc[i, 0]), 4)
+                upper = round(float(conf_int.iloc[i, 1]), 4)
+            points.append(
+                ForecastPoint(
+                    date=last_date + timedelta(days=i + 1),
+                    predicted_value=round(float(val), 4),
+                    lower=lower,
+                    upper=upper,
+                )
             )
-            for i, val in enumerate(predictions)
-        ]
+        return points

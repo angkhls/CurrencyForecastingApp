@@ -1,138 +1,241 @@
 from datetime import date, timedelta
-from typing import List
-from domain.models import CurrencyRate, CurrencyCode, ForecastResult, RateHistory
+from typing import Dict, List, Optional
+
+from domain.models import (
+    ChartData,
+    ConvertResult,
+    CurrencyCode,
+    CurrencyPair,
+    CurrencyRate,
+    DashboardRate,
+    DashboardResponse,
+    ForecastMethod,
+    ForecastResult,
+    ModelMetrics,
+    PeriodPreset,
+)
 from domain.repositories import CurrencyRateRepository
 from infrastructure.nbrb_client import NbrbApiClient
-from service.forecaster import BaseForecast
+from service.forecaster import BaseForecast, SARIMAXForecaster
+from service.gemini_forecaster import GeminiForecaster
+from service.metrics_calc import mape, rmse
+from service.pairs import build_pair_series, pair_currencies, period_to_days
+from service.technical import build_chart_points
 
-# ─────────────────────────────────────────────
-# ПАТТЕРН: Facade (Фасад) + DI (Внедрение зависимостей)
-#
-# RateService — фасад: скрывает сложность взаимодействия
-# между репозиторием, NBRB клиентом и алгоритмом прогноза.
-#
-# Зависимости (репозиторий, клиент, forecaster) передаются
-# через конструктор — это Dependency Injection.
-# Сервис не создаёт их сам, что упрощает тестирование.
-# ─────────────────────────────────────────────
-
-# Сколько дней истории загружаем для обучения модели
 HISTORY_DAYS = 365
+HOLDOUT_DAYS = 30
+DASHBOARD_CURRENCIES: List[CurrencyCode] = ["USD", "EUR", "RUB", "CNY"]
 
 
 class RateService:
-    """
-    Сервис управления курсами валют.
-    Оркестрирует: загрузку с NBRB → сохранение в БД → прогноз.
-    """
-
     def __init__(
         self,
-        repository: CurrencyRateRepository,  # абстракция, не конкретный класс!
+        repository: CurrencyRateRepository,
         nbrb_client: NbrbApiClient,
-        forecaster: BaseForecast             # абстракция стратегии прогноза
+        gemini_api_key: str = "",
+        gemini_model: str = "gemini-2.0-flash",
     ):
         self._repo = repository
         self._nbrb = nbrb_client
-        self._forecaster = forecaster
+        self._gemini_key = gemini_api_key
+        self._gemini_model = gemini_model
+        self._sarimax = SARIMAXForecaster()
+
+    def _forecaster(self, method: ForecastMethod) -> BaseForecast:
+        if method == "gemini":
+            return GeminiForecaster(self._gemini_key, self._gemini_model)
+        return self._sarimax
 
     async def sync_rates(self, currency: CurrencyCode) -> int:
-        """
-        Синхронизировать курсы с NBRB.
-
-        Логика:
-        - Если данных нет — загружаем последние HISTORY_DAYS дней
-        - Если данные устарели — догружаем только недостающие дни
-        - Если данные свежие — ничего не делаем
-
-        Возвращает количество загруженных записей.
-        """
         latest = await self._repo.get_latest(currency)
         today = date.today()
 
         if latest is None:
-            # Данных нет совсем — загружаем всю историю
             from_date = today - timedelta(days=HISTORY_DAYS)
         elif latest.date >= today:
-            # Данные уже актуальны
             return 0
         else:
-            # Загружаем только то чего не хватает
             from_date = latest.date + timedelta(days=1)
 
-        rates = await self._nbrb.get_rates_for_period(
-            currency, from_date, today
-        )
-
+        rates = await self._nbrb.get_rates_for_period(currency, from_date, today)
         if rates:
             await self._repo.save_many(rates)
-
         return len(rates)
 
-    async def get_history(
-        self,
-        currency: CurrencyCode,
-        days: int = 30
-    ) -> List[CurrencyRate]:
-        """
-        Получить историю курсов за последние N дней.
-        Сначала синхронизируем данные, потом отдаём из БД.
-        """
+    async def _ensure_currency(self, currency: CurrencyCode) -> None:
         await self.sync_rates(currency)
+
+    async def _load_pair_history(self, pair: CurrencyPair, days: int) -> List[CurrencyRate]:
+        base, cross = pair_currencies(pair)
+        await self._ensure_currency(base)
+        if cross:
+            await self._ensure_currency(cross)
+        else:
+            cross = "USD" if base != "USD" else "EUR"
 
         to_date = date.today()
         from_date = to_date - timedelta(days=days)
+        base_hist = await self._repo.get_history(base, from_date, to_date)
 
+        if pair in ("USD_BYN", "EUR_BYN"):
+            return base_hist
+
+        await self._ensure_currency("USD")
+        usd_hist = await self._repo.get_history("USD", from_date, to_date)
+        if pair == "EUR_USD":
+            eur_hist = base_hist if base == "EUR" else await self._repo.get_history("EUR", from_date, to_date)
+            return build_pair_series(pair, usd_hist, eur_hist)
+        return base_hist
+
+    async def get_history(
+        self, currency: CurrencyCode, days: int = 30
+    ) -> List[CurrencyRate]:
+        await self._ensure_currency(currency)
+        to_date = date.today()
+        from_date = to_date - timedelta(days=days)
         return await self._repo.get_history(currency, from_date, to_date)
+
+    async def get_rate_on_date(
+        self, currency: CurrencyCode, target_date: date
+    ) -> CurrencyRate:
+        cached = await self._repo.get_by_currency_and_date(currency, target_date)
+        if cached:
+            return cached
+        rate = await self._nbrb.get_rate(currency, target_date)
+        await self._repo.save(rate)
+        return rate
+
+    async def get_latest_rate(self, currency: CurrencyCode) -> CurrencyRate:
+        await self._ensure_currency(currency)
+        latest = await self._repo.get_latest(currency)
+        if latest is None:
+            raise ValueError(f"Нет данных для валюты {currency}")
+        return latest
+
+    async def get_dashboard(self) -> DashboardResponse:
+        rates: List[DashboardRate] = []
+        for currency in DASHBOARD_CURRENCIES:
+            try:
+                latest = await self.get_latest_rate(currency)
+                prev = await self._repo.get_by_currency_and_date(
+                    currency, latest.date - timedelta(days=7)
+                )
+                change_pct = None
+                if prev and prev.rate:
+                    change_pct = round((latest.rate - prev.rate) / prev.rate * 100, 2)
+                rates.append(
+                    DashboardRate(
+                        currency=currency,
+                        rate=latest.rate,
+                        date=latest.date,
+                        change_pct=change_pct,
+                    )
+                )
+            except ValueError:
+                continue
+        return DashboardResponse(rates=rates)
+
+    async def convert(
+        self, amount: float, from_currency: CurrencyCode, to_currency: CurrencyCode
+    ) -> ConvertResult:
+        if from_currency == to_currency:
+            latest = await self.get_latest_rate(from_currency)
+            return ConvertResult(
+                amount=amount,
+                from_currency=from_currency,
+                to_currency=to_currency,
+                rate=1.0,
+                result=amount,
+                date=latest.date,
+            )
+
+        from_rate = await self.get_latest_rate(from_currency)
+        to_rate = await self.get_latest_rate(to_currency)
+        # Курсы НБРБ: BYN за 1 единицу валюты
+        result = amount * (from_rate.rate / to_rate.rate)
+        cross_rate = from_rate.rate / to_rate.rate
+        return ConvertResult(
+            amount=amount,
+            from_currency=from_currency,
+            to_currency=to_currency,
+            rate=round(cross_rate, 6),
+            result=round(result, 4),
+            date=from_rate.date,
+        )
+
+    async def get_chart(self, pair: CurrencyPair, period: PeriodPreset) -> ChartData:
+        days = period_to_days(period)
+        history = await self._load_pair_history(pair, days)
+        points, levels = build_chart_points(history)
+        return ChartData(pair=pair, period=period, points=points, levels=levels)
+
+    def _evaluate_holdout(
+        self, history: List[CurrencyRate], method: ForecastMethod, holdout: int
+    ) -> tuple[float, float]:
+        if len(history) <= holdout + 10:
+            holdout = max(5, len(history) // 4)
+        train = history[:-holdout]
+        test = history[-holdout:]
+        try:
+            predicted = self._forecaster(method).predict(train, holdout)
+        except Exception:
+            return 0.0, 0.0
+        actual = [r.rate for r in test]
+        pred = [p.predicted_value for p in predicted[: len(test)]]
+        if len(pred) != len(actual):
+            n = min(len(pred), len(actual))
+            actual, pred = actual[:n], pred[:n]
+        if not actual:
+            return 0.0, 0.0
+        return round(mape(actual, pred), 2), round(rmse(actual, pred), 4)
 
     async def get_forecast(
         self,
-        currency: CurrencyCode,
-        days: int = 7
+        pair: CurrencyPair,
+        days: int = 7,
+        method: ForecastMethod = "sarimax",
     ) -> ForecastResult:
-        """
-        Построить прогноз курса на N дней вперёд.
-
-        Шаги:
-        1. Убедиться что данные актуальны (sync)
-        2. Загрузить историю из БД для обучения
-        3. Передать историю в алгоритм прогноза
-        4. Вернуть результат
-        """
-        # Шаг 1: синхронизация
-        await self.sync_rates(currency)
-
-        # Шаг 2: берём историю для обучения модели
-        to_date = date.today()
-        from_date = to_date - timedelta(days=HISTORY_DAYS)
-        history = await self._repo.get_history(currency, from_date, to_date)
-
+        history = await self._load_pair_history(pair, HISTORY_DAYS)
         if len(history) < 30:
             raise ValueError(
-                f"Недостаточно данных для прогноза: {len(history)} дней. "
-                f"Нужно минимум 30."
+                f"Недостаточно данных для прогноза: {len(history)} дней (нужно ≥30)"
             )
 
-        # Шаг 3: запускаем алгоритм прогноза (Strategy)
-        forecast_points = self._forecaster.predict(history, days)
+        mape_val, rmse_val = self._evaluate_holdout(history, method, HOLDOUT_DAYS)
+        forecast_points = self._forecaster(method).predict(history, days)
 
-        # Шаг 4: возвращаем результат
         return ForecastResult(
-            currency=currency,
-            forecast=forecast_points
+            pair=pair,
+            method=method,
+            forecast=forecast_points,
+            mape=mape_val,
+            rmse=rmse_val,
         )
 
-    async def get_latest_rate(
-        self,
-        currency: CurrencyCode
-    ) -> CurrencyRate:
-        """
-        Получить актуальный курс валюты.
-        """
-        await self.sync_rates(currency)
-        latest = await self._repo.get_latest(currency)
+    async def get_metrics(
+        self, pair: CurrencyPair, method: ForecastMethod, holdout_days: int = 30
+    ) -> ModelMetrics:
+        history = await self._load_pair_history(pair, HISTORY_DAYS)
+        mape_val, rmse_val = self._evaluate_holdout(history, method, holdout_days)
+        return ModelMetrics(
+            pair=pair,
+            method=method,
+            mape=mape_val,
+            rmse=rmse_val,
+            holdout_days=holdout_days,
+        )
 
-        if latest is None:
-            raise ValueError(f"Нет данных для валюты {currency}")
-
-        return latest
+    async def compare_methods(self, pair: CurrencyPair) -> Dict[str, ModelMetrics]:
+        result: Dict[str, ModelMetrics] = {}
+        for method in ("sarimax", "gemini"):
+            try:
+                result[method] = await self.get_metrics(pair, method)  # type: ignore[arg-type]
+            except Exception:
+                result[method] = ModelMetrics(
+                    pair=pair,
+                    method=method,  # type: ignore[arg-type]
+                    mape=-1.0,
+                    rmse=-1.0,
+                    holdout_days=HOLDOUT_DAYS,
+                )
+        return result
