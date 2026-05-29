@@ -50,9 +50,16 @@ const MetricsPanel: React.FC<Props> = ({ pair }) => {
           </div>
           <div className="metric-box">
             <div className="metric-box__value">
-              {gemini && gemini.mape >= 0 ? `${gemini.mape.toFixed(2)}%` : "—"}
+              {gemini && gemini.mape >= 0
+                ? `${gemini.mape.toFixed(2)}%`
+                : gemini && gemini.mape < 0
+                  ? "N/A"
+                  : "—"}
             </div>
             <div className="metric-box__label">Gemini MAPE</div>
+            {gemini && gemini.mape < 0 && (
+              <div className="metric-box__label">Укажите GEMINI_API_KEY в .env</div>
+            )}
             {gemini && gemini.rmse >= 0 && (
               <div className="metric-box__label">RMSE: {gemini.rmse.toFixed(4)}</div>
             )}

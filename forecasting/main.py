@@ -13,6 +13,7 @@ from api.routes import get_bank_rates_service, get_rate_service, router
 from config import CORS_ORIGINS, GEMINI_API_KEY, GEMINI_MODEL, POSTGRES_DSN, SQLITE_PATH, STORAGE
 from infrastructure.db_repository import PostgresCurrencyRateRepository
 from infrastructure.belarusbank_client import BelarusbankClient
+from infrastructure.myfin_client import MyfinClient
 from infrastructure.nbrb_client import NbrbApiClient
 from infrastructure.sqlite_repository import SqliteCurrencyRateRepository
 from service.bank_rates_service import BankRatesService
@@ -51,7 +52,7 @@ async def lifespan(app: FastAPI):
         gemini_model=GEMINI_MODEL,
     )
 
-    bank_rates = BankRatesService(BelarusbankClient(), nbrb)
+    bank_rates = BankRatesService(BelarusbankClient(), MyfinClient(), nbrb)
     app.state.rate_service = service
     app.state.bank_rates_service = bank_rates
 

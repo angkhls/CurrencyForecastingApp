@@ -1,47 +1,46 @@
-from domain.models import BankCurrencyQuotes, BankRatesTable, BankRow, CurrencyCode
+from domain.models import BankRatesTable, BankRow
 from infrastructure.belarusbank_client import BelarusbankClient
+from infrastructure.myfin_client import MyfinClient
 from infrastructure.nbrb_client import NbrbApiClient
+
+
 class BankRatesService:
-    def __init__(self, belarusbank: BelarusbankClient, nbrb: NbrbApiClient):
+    def __init__(
+        self,
+        belarusbank: BelarusbankClient,
+        myfin: MyfinClient,
+        nbrb: NbrbApiClient,
+    ):
         self._bb = belarusbank
+        self._myfin = myfin
         self._nbrb = nbrb
 
     async def get_minsk_table(self) -> BankRatesTable:
-        rows: list[BankRow] = []
-        city = "Минск"
+        rows_by_id: dict[str, BankRow] = {}
 
         try:
-            bb_data = await self._bb.fetch_city(city)
+            for row in await self._myfin.fetch_bank_rows():
+                rows_by_id[row.bank_id] = row
+        except Exception:
+            pass
+
+        try:
+            bb_data = await self._bb.fetch_city("Минск")
             bb_row = self._bb.aggregate_best(bb_data, "Беларусбанк", "belarusbank")
             if bb_row:
-                rows.append(bb_row)
+                rows_by_id["belarusbank"] = bb_row
         except Exception:
             pass
 
-        try:
-            nbrb_row = await self._nbrb_official_row()
-            if nbrb_row:
-                rows.append(nbrb_row)
-        except Exception:
-            pass
+        order = ["belarusbank", "prior", "alfa", "bsb", "sber"]
+        rows = [rows_by_id[bid] for bid in order if bid in rows_by_id]
 
-        return BankRatesTable(city=city, rows=rows, source_note=(
-            "Лучшие курсы по отделениям Беларусбанка (API belarusbank.by) и официальный курс НБРБ. "
-            "Полный список банков как на myfin.by требует подключения API каждого банка отдельно."
-        ))
-
-    async def _nbrb_official_row(self) -> BankRow:
-        from datetime import date
-
-        today = date.today()
-        usd = await self._nbrb.get_rate("USD", today)
-        eur = await self._nbrb.get_rate("EUR", today)
-        rub = await self._nbrb.get_rate("RUB", today)
-        r100 = rub.rate * 100
-        return BankRow(
-            bank_id="nbrb",
-            bank_name="НБРБ (официальный)",
-            usd=BankCurrencyQuotes(sell=usd.rate, buy=usd.rate),
-            eur=BankCurrencyQuotes(sell=eur.rate, buy=eur.rate),
-            rub100=BankCurrencyQuotes(sell=r100, buy=r100),
+        return BankRatesTable(
+            city="Минск",
+            rows=rows,
+            source_note=(
+                "Курсы «Сдать/Купить» в банках Минска: myfin.by (таблица банков) "
+                "и API Беларусбанка. Для курсовой: полный агрегатор как myfin требует "
+                "API каждого банка; мы подключаем основные банки через публичные источники."
+            ),
         )

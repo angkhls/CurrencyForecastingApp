@@ -381,7 +381,10 @@ body {
 }
 
 .legend .rate::before {
-  background: var(--blue);
+  background: #38bdf8;
+}
+.legend .forecast::before {
+  background: #fb923c;
 }
 .legend .sma::before {
   background: var(--purple);

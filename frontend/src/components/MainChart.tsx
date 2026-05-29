@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import {
-  Area,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -19,61 +18,63 @@ interface Props {
   large?: boolean;
 }
 
+type Row = {
+  dateKey: string;
+  dateLabel: string;
+  rate?: number;
+  sma?: number;
+  ema?: number;
+  forecast?: number;
+};
+
 function parseIso(iso: string): Date {
   return new Date(iso.includes("T") ? iso : `${iso}T12:00:00`);
 }
 
-function isWeekendDate(d: Date): boolean {
-  const day = d.getDay();
-  return day === 0 || day === 6;
-}
-
 const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
   const { data, yDomain } = useMemo(() => {
-    if (!chart) return { data: [], yDomain: [0, 1] as [number, number] };
+    if (!chart) return { data: [] as Row[], yDomain: [0, 1] as [number, number] };
 
-    const hist = chart.points.map((p) => {
+    const rows: Row[] = chart.points.map((p) => {
       const dt = parseIso(p.date);
       return {
-        date: dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
-        isWeekend: p.is_weekend || isWeekendDate(dt),
+        dateKey: p.date.slice(0, 10),
+        dateLabel: dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
         rate: p.rate,
         sma: p.sma_20 ?? undefined,
         ema: p.ema_20 ?? undefined,
-        forecast: undefined as number | undefined,
-        lower: undefined as number | undefined,
-        upper: undefined as number | undefined,
       };
     });
 
-    let rows = hist;
     if (forecast?.forecast.length) {
-      const fc = forecast.forecast.map((p) => {
+      const last = rows[rows.length - 1];
+      if (last) {
+        last.forecast = last.rate;
+      }
+
+      for (const p of forecast.forecast) {
+        const key = p.date.slice(0, 10);
+        const existing = rows.find((r) => r.dateKey === key);
         const dt = parseIso(p.date);
-        return {
-          date: dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
-          isWeekend: isWeekendDate(dt),
-          rate: undefined as number | undefined,
-          sma: undefined,
-          ema: undefined,
-          forecast: p.predicted_value,
-          lower: p.lower ?? p.predicted_value * 0.995,
-          upper: p.upper ?? p.predicted_value * 1.005,
-        };
-      });
-      rows = [...hist, ...fc];
+        const label = dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+        if (existing) {
+          existing.forecast = p.predicted_value;
+        } else {
+          rows.push({
+            dateKey: key,
+            dateLabel: label,
+            forecast: p.predicted_value,
+          });
+        }
+      }
     }
 
     const values: number[] = [];
-    chart.points.forEach((p) => {
-      values.push(p.rate);
-      if (p.sma_20 != null) values.push(p.sma_20);
-      if (p.ema_20 != null) values.push(p.ema_20);
-    });
-    forecast?.forecast.forEach((p) => {
-      values.push(p.predicted_value);
-      if (p.lower != null) values.push(p.lower);
-      if (p.upper != null) values.push(p.upper);
+    rows.forEach((r) => {
+      if (r.rate != null) values.push(r.rate);
+      if (r.sma != null) values.push(r.sma);
+      if (r.ema != null) values.push(r.ema);
+      if (r.forecast != null) values.push(r.forecast);
     });
 
     let yMin = chart.y_min;
@@ -82,8 +83,8 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
       yMin = Math.min(yMin, ...values);
       yMax = Math.max(yMax, ...values);
     }
-    const span = yMax - yMin || yMin * 0.02 || 0.1;
-    const pad = Math.max(span * 0.06, 0.015);
+    const span = yMax - yMin || 0.1;
+    const pad = Math.max(span * 0.08, 0.015);
 
     return { data: rows, yDomain: [yMin - pad, yMax + pad] as [number, number] };
   }, [chart, forecast]);
@@ -104,7 +105,11 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-          <XAxis dataKey="date" tick={{ fill: "#9aa8bc", fontSize: 11 }} interval="preserveStartEnd" />
+          <XAxis
+            dataKey="dateLabel"
+            tick={{ fill: "#9aa8bc", fontSize: 11 }}
+            interval="preserveStartEnd"
+          />
           <YAxis
             tick={{ fill: "#9aa8bc", fontSize: 11 }}
             domain={yDomain}
@@ -113,13 +118,17 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
             allowDataOverflow
           />
           <Tooltip
+            labelFormatter={(_, payload) => {
+              const row = payload?.[0]?.payload as Row | undefined;
+              return row?.dateKey ?? "";
+            }}
             contentStyle={{
               background: "rgba(20,28,40,0.95)",
               border: "1px solid rgba(255,255,255,0.15)",
               borderRadius: 8,
             }}
             formatter={(value: number, name: string) => [
-              typeof value === "number" ? value.toFixed(4) : value,
+              typeof value === "number" ? value.toFixed(4) : "—",
               name,
             ]}
           />
@@ -127,10 +136,11 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
             type="monotone"
             dataKey="rate"
             name="Курс"
-            stroke="#3dd6c3"
+            stroke="#38bdf8"
             strokeWidth={2.5}
             dot={false}
             connectNulls={false}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -140,6 +150,7 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
             strokeWidth={1.5}
             dot={false}
             connectNulls={false}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -149,40 +160,26 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
             strokeWidth={1.5}
             dot={false}
             connectNulls={false}
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
             dataKey="forecast"
             name="Прогноз"
-            stroke="#e2e8f0"
-            strokeWidth={2}
-            strokeDasharray="6 3"
-            dot={false}
+            stroke="#fb923c"
+            strokeWidth={2.5}
+            strokeDasharray="8 4"
+            dot={{ r: 3, fill: "#fb923c" }}
             connectNulls
-          />
-          <Area
-            type="monotone"
-            dataKey="upper"
-            stackId="band"
-            stroke="none"
-            fill="rgba(61,214,195,0.08)"
-            connectNulls={false}
-          />
-          <Area
-            type="monotone"
-            dataKey="lower"
-            stackId="band"
-            stroke="none"
-            fill="rgba(61,214,195,0.08)"
-            connectNulls={false}
+            isAnimationActive={false}
           />
         </ComposedChart>
       </ResponsiveContainer>
       <div className="legend">
-        <span className="rate">Курс</span>
+        <span className="rate">Курс (голубой)</span>
         <span className="sma">SMA</span>
         <span className="ema">EMA</span>
-        <span className="forecast">Прогноз</span>
+        <span className="forecast">Прогноз (оранж.)</span>
       </div>
     </div>
   );

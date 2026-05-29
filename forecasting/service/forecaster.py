@@ -88,16 +88,25 @@ class SARIMAXForecaster(BaseForecast):
 
         # Шаг 2: создаём и обучаем модель
         # disp=False — отключаем вывод итераций обучения в консоль
-        model = SARIMAX(
-            series,
-            order=self.order,
-            seasonal_order=self.seasonal_order
-        )
-        result = model.fit(disp=False)
+        try:
+            model = SARIMAX(
+                series,
+                order=self.order,
+                seasonal_order=self.seasonal_order,
+            )
+            result = model.fit(disp=False)
+            forecast_res = result.get_forecast(steps=days)
+            predictions = forecast_res.predicted_mean
+            conf_int = forecast_res.conf_int(alpha=0.2)
+        except Exception:
+            model = SARIMAX(series, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+            result = model.fit(disp=False)
+            forecast_res = result.get_forecast(steps=days)
+            predictions = forecast_res.predicted_mean
+            conf_int = forecast_res.conf_int(alpha=0.2)
 
-        forecast_res = result.get_forecast(steps=days)
-        predictions = forecast_res.predicted_mean
-        conf_int = forecast_res.conf_int(alpha=0.2)
+        last_val = float(series.iloc[-1])
+        predictions = predictions.clip(lower=last_val * 0.85, upper=last_val * 1.15)
 
         last_date = business[-1].date
         forecast_dates = _next_business_days(last_date, days)

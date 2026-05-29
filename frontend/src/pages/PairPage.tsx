@@ -69,7 +69,8 @@ const PairPage: React.FC = () => {
         </div>
         {forecast && forecast.mape != null && forecast.mape >= 0 && (
           <div className="accuracy-banner">
-            <strong>{method.toUpperCase()}</strong> — ошибка на тесте: MAPE{" "}
+            <strong>{method.toUpperCase()}</strong> — точность на тестовом периоде (последние 30
+            дней): MAPE{" "}
             <span className="accuracy-value">{forecast.mape.toFixed(2)}%</span>, RMSE{" "}
             <span className="accuracy-value">{forecast.rmse?.toFixed(4) ?? "—"}</span>
           </div>
