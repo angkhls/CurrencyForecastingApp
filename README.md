@@ -48,7 +48,7 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip nodejs npm
 ```
 
-Проверка: `python3 --version` (≥3.10), `node --version` (≥18).
+Проверка: `python3 --version` (≥3.10), `node --version` (≥18; у вас 18.19 — подходит).
 
 ### 2. Backend
 
