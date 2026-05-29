@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -18,35 +18,21 @@ services:
       timeout: 5s
       retries: 5
 
-  ml-service:
+  api:
     build:
       context: ../forecasting
       dockerfile: Dockerfile
-    container_name: currency_ml
+    container_name: currency_api
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: currency_backend
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      ml-service:
-        condition: service_started
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/currencydb
-      SPRING_DATASOURCE_USERNAME: currency_user
-      SPRING_DATASOURCE_PASSWORD: currency_pass
-      ML_SERVICE_URL: http://ml-service:8000
-      NBRB_API_URL: https://api.nbrb.by/exrates
+      STORAGE: postgres
+      DATABASE_URL: postgresql://currency_user:currency_pass@postgres:5432/currencydb
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

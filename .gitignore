@@ -1,7 +1,13 @@
 # Python
 forecasting/venv/
 forecasting/__pycache__/
+forecasting/data/
+forecasting/.env
 *.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 
 # Java
 **/target/
