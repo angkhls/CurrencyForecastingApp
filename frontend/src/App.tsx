@@ -1,33 +1,32 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import Layout from "./components/Layout";
-import Dashboard from "./pages/Dashboard";
-import ForecastPage from "./pages/ForecastPage";
-import MacroInfoPage from "./pages/MacroInfoPage";
-import MarketPage from "./pages/MarketPage";
-import ToolsPage from "./pages/ToolsPage";
+import ConverterPage from "./pages/ConverterPage";
+import HomePage from "./pages/HomePage";
+import PairPage from "./pages/PairPage";
 
 const App: React.FC = () => (
   <BrowserRouter>
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/market" element={<MarketPage />} />
-        <Route path="/forecast" element={<ForecastPage />} />
-        <Route path="/tools" element={<ToolsPage />} />
-        <Route path="/macro" element={<MacroInfoPage />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/converter" element={<ConverterPage />} />
+        <Route path="/pair/:pair" element={<PairPage />} />
       </Route>
-      <Route path="/live" element={<Navigate to="/market" replace />} />
-      <Route path="/converter" element={<Navigate to="/tools" replace />} />
-      <Route path="/history" element={<Navigate to="/tools" replace />} />
-      <Route path="/forecast/:pair" element={<ForecastRedirect />} />
+      <Route path="/live" element={<Navigate to="/" replace />} />
+      <Route path="/market" element={<Navigate to="/" replace />} />
+      <Route path="/forecast" element={<Navigate to="/pair/USD_BYN" replace />} />
+      <Route path="/forecast/:pair" element={<LegacyForecastRedirect />} />
+      <Route path="/tools" element={<Navigate to="/converter" replace />} />
+      <Route path="/history" element={<Navigate to="/converter" replace />} />
+      <Route path="/macro" element={<Navigate to="/" replace />} />
     </Routes>
   </BrowserRouter>
 );
 
-const ForecastRedirect: React.FC = () => {
+const LegacyForecastRedirect: React.FC = () => {
   const { pair } = useParams<{ pair: string }>();
-  return <Navigate to={`/forecast?pair=${pair ?? "USD_BYN"}`} replace />;
+  return <Navigate to={`/pair/${pair ?? "USD_BYN"}`} replace />;
 };
 
 export default App;

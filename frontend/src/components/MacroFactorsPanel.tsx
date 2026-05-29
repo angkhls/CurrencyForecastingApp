@@ -1,13 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { currencyApi } from "../api/client";
-import type { CurrencyPair, MacroPanel } from "../types";
-import { PAIR_LABELS } from "../types";
+import type { MacroPanel } from "../types";
 
-interface Props {
-  pair: CurrencyPair;
-}
-
-const MacroFactorsPanel: React.FC<Props> = ({ pair }) => {
+const MacroFactorsPanel: React.FC = () => {
   const [panel, setPanel] = useState<MacroPanel | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +11,7 @@ const MacroFactorsPanel: React.FC<Props> = ({ pair }) => {
     (async () => {
       try {
         setLoading(true);
-        const data = await currencyApi.getMacro(pair);
+        const data = await currencyApi.getMacroBelarus();
         if (!cancelled) setPanel(data);
       } catch {
         if (!cancelled) setPanel(null);
@@ -27,16 +22,16 @@ const MacroFactorsPanel: React.FC<Props> = ({ pair }) => {
     return () => {
       cancelled = true;
     };
-  }, [pair]);
+  }, []);
 
   return (
     <div className="glass-card macro-panel">
-      <h3>Макро-факторы — {PAIR_LABELS[pair]}</h3>
+      <h3>Макро-факторы — Республика Беларусь</h3>
       <p className="macro-panel__intro">
-        Ставки ЦБ, сырьё и инфляция влияют на курс. Ниже — актуальные ориентиры из открытых источников.
+        Ставка НБРБ, инфляция, нефть и золото — факторы, влияющие на BYN и кросс-курсы.
       </p>
       {loading ? (
-        <p className="loading">Загрузка факторов…</p>
+        <p className="loading">Загрузка…</p>
       ) : !panel?.indicators.length ? (
         <p className="macro-panel__empty">Данные временно недоступны</p>
       ) : (
@@ -47,11 +42,7 @@ const MacroFactorsPanel: React.FC<Props> = ({ pair }) => {
               <div className="macro-card__value">
                 {ind.value} <span className="macro-card__unit">{ind.unit}</span>
                 {ind.change_pct != null && (
-                  <span
-                    className={
-                      ind.change_pct >= 0 ? "macro-card__chg trend-up" : "macro-card__chg trend-down"
-                    }
-                  >
+                  <span className={ind.change_pct >= 0 ? "macro-card__chg trend-up" : "macro-card__chg trend-down"}>
                     {ind.change_pct >= 0 ? " ▲" : " ▼"}
                     {Math.abs(ind.change_pct)}%
                   </span>

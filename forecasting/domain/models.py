@@ -97,5 +97,42 @@ class DashboardRate(BaseModel):
     change_pct: Optional[float] = None
 
 
+class CryptoRate(BaseModel):
+    symbol: str
+    price_usd: float
+    price_byn: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
+class BankCurrencyQuotes(BaseModel):
+    """sell — банк покупает (клиент сдаёт), buy — банк продаёт (клиент покупает)."""
+    sell: float
+    buy: float
+
+
+class BankRow(BaseModel):
+    bank_id: str
+    bank_name: str
+    usd: BankCurrencyQuotes
+    eur: BankCurrencyQuotes
+    rub100: BankCurrencyQuotes
+
+
+class BankRatesTable(BaseModel):
+    city: str
+    rows: List[BankRow]
+    source_note: str = ""
+
+
+class GoldCalcResult(BaseModel):
+    amount: float
+    currency: str
+    amount_byn: float
+    gold_grams: float
+    price_per_gram_byn: float
+    product_name: str
+
+
 class DashboardResponse(BaseModel):
     rates: List[DashboardRate]
+    bitcoin: Optional[CryptoRate] = None

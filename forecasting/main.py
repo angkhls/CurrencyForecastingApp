@@ -9,11 +9,13 @@ import asyncpg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import get_rate_service, router
+from api.routes import get_bank_rates_service, get_rate_service, router
 from config import CORS_ORIGINS, GEMINI_API_KEY, GEMINI_MODEL, POSTGRES_DSN, SQLITE_PATH, STORAGE
 from infrastructure.db_repository import PostgresCurrencyRateRepository
+from infrastructure.belarusbank_client import BelarusbankClient
 from infrastructure.nbrb_client import NbrbApiClient
 from infrastructure.sqlite_repository import SqliteCurrencyRateRepository
+from service.bank_rates_service import BankRatesService
 from service.rate_service import RateService
 
 INIT_SQL = """
@@ -49,12 +51,18 @@ async def lifespan(app: FastAPI):
         gemini_model=GEMINI_MODEL,
     )
 
+    bank_rates = BankRatesService(BelarusbankClient(), nbrb)
     app.state.rate_service = service
+    app.state.bank_rates_service = bank_rates
 
     def _get_service() -> RateService:
         return app.state.rate_service
 
+    def _get_banks() -> BankRatesService:
+        return app.state.bank_rates_service
+
     app.dependency_overrides[get_rate_service] = _get_service
+    app.dependency_overrides[get_bank_rates_service] = _get_banks
 
     # Первичная загрузка курсов при старте
     for currency in ("USD", "EUR", "RUB", "CNY"):

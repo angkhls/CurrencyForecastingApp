@@ -71,8 +71,44 @@ export interface DashboardRate {
   change_pct?: number | null;
 }
 
+export interface CryptoRate {
+  symbol: string;
+  price_usd: number;
+  price_byn?: number | null;
+  change_pct?: number | null;
+}
+
 export interface DashboardResponse {
   rates: DashboardRate[];
+  bitcoin?: CryptoRate | null;
+}
+
+export interface BankCurrencyQuotes {
+  sell: number;
+  buy: number;
+}
+
+export interface BankRow {
+  bank_id: string;
+  bank_name: string;
+  usd: BankCurrencyQuotes;
+  eur: BankCurrencyQuotes;
+  rub100: BankCurrencyQuotes;
+}
+
+export interface BankRatesTable {
+  city: string;
+  rows: BankRow[];
+  source_note: string;
+}
+
+export interface GoldCalcResult {
+  amount: number;
+  currency: CurrencyCode;
+  amount_byn: number;
+  gold_grams: number;
+  price_per_gram_byn: number;
+  product_name: string;
 }
 
 export interface ConvertResult {

@@ -1,9 +1,12 @@
 from datetime import date, timedelta
 from typing import Dict, List, Optional
 
+import httpx
+
 from domain.models import (
     ChartData,
     ConvertResult,
+    CryptoRate,
     CurrencyCode,
     CurrencyPair,
     CurrencyRate,
@@ -11,6 +14,7 @@ from domain.models import (
     DashboardResponse,
     ForecastMethod,
     ForecastResult,
+    GoldCalcResult,
     MacroPanel,
     ModelMetrics,
     PeriodPreset,
@@ -142,7 +146,69 @@ class RateService:
                 )
             except ValueError:
                 continue
-        return DashboardResponse(rates=rates)
+        bitcoin = await self._fetch_bitcoin_byn()
+        return DashboardResponse(rates=rates, bitcoin=bitcoin)
+
+    async def _fetch_bitcoin_byn(self) -> Optional[CryptoRate]:
+        try:
+            async with httpx.AsyncClient(timeout=12) as client:
+                r = await client.get(
+                    "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD",
+                    params={"interval": "1d", "range": "5d"},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+                r.raise_for_status()
+                closes = r.json()["chart"]["result"][0]["indicators"]["quote"][0]["close"]
+            closes = [c for c in closes if c is not None]
+            if not closes:
+                return None
+            usd = float(closes[-1])
+            change = None
+            if len(closes) > 1 and closes[-2]:
+                change = round((usd - closes[-2]) / closes[-2] * 100, 2)
+            usd_byn = await self.get_latest_rate("USD")
+            return CryptoRate(
+                symbol="BTC",
+                price_usd=round(usd, 2),
+                price_byn=round(usd * usd_byn.rate, 2),
+                change_pct=change,
+            )
+        except Exception:
+            return None
+
+    async def calc_gold(self, amount: float, currency: str) -> GoldCalcResult:
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.get("https://api.nbrb.by/bankingots/prices")
+            r.raise_for_status()
+            items = r.json()
+        if not items:
+            raise ValueError("Нет цен на золото от НБРБ")
+        item = next((i for i in items if "999" in str(i.get("Name", ""))), items[0])
+        per_gram = float(item.get("Value") or item.get("Price") or 0)
+        if per_gram <= 0:
+            raise ValueError("Некорректная цена золота")
+
+        if currency == "USD":
+            usd = await self.get_latest_rate("USD")
+            amount_byn = amount * usd.rate
+        elif currency == "EUR":
+            eur = await self.get_latest_rate("EUR")
+            amount_byn = amount * eur.rate
+        elif currency == "RUB":
+            rub = await self.get_latest_rate("RUB")
+            amount_byn = amount * rub.rate
+        else:
+            amount_byn = amount
+
+        grams = round(amount_byn / per_gram, 4)
+        return GoldCalcResult(
+            amount=amount,
+            currency=currency,
+            amount_byn=round(amount_byn, 2),
+            gold_grams=grams,
+            price_per_gram_byn=per_gram,
+            product_name=str(item.get("Name", "Золото НБРБ")),
+        )
 
     async def convert(
         self, amount: float, from_currency: CurrencyCode, to_currency: CurrencyCode

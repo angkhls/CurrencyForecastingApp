@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from domain.models import (
+    BankRatesTable,
     ChartData,
     ConvertResult,
     CurrencyCode,
@@ -12,16 +13,22 @@ from domain.models import (
     DashboardResponse,
     ForecastMethod,
     ForecastResult,
+    GoldCalcResult,
     MacroPanel,
     ModelMetrics,
     PeriodPreset,
 )
+from service.bank_rates_service import BankRatesService
 from service.rate_service import RateService
 
 router = APIRouter(prefix="/api/v1", tags=["currency"])
 
 
 def get_rate_service() -> RateService:
+    raise NotImplementedError("Dependency not configured")
+
+
+def get_bank_rates_service() -> BankRatesService:
     raise NotImplementedError("Dependency not configured")
 
 
@@ -64,6 +71,14 @@ async def get_rate_on_date(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/macro/belarus", response_model=MacroPanel)
+async def get_macro_belarus(service: RateService = Depends(get_rate_service)):
+    try:
+        return await service.get_macro("USD_BYN")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @router.get("/pairs/{pair}/macro", response_model=MacroPanel)
 async def get_macro(
     pair: CurrencyPair,
@@ -73,6 +88,26 @@ async def get_macro(
         return await service.get_macro(pair)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/banks/minsk", response_model=BankRatesTable)
+async def get_bank_rates(banks: BankRatesService = Depends(get_bank_rates_service)):
+    try:
+        return await banks.get_minsk_table()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/tools/gold", response_model=GoldCalcResult)
+async def calc_gold(
+    amount: float = Query(gt=0),
+    currency: str = Query(default="BYN"),
+    service: RateService = Depends(get_rate_service),
+):
+    try:
+        return await service.calc_gold(amount, currency)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/pairs/{pair}/chart", response_model=ChartData)

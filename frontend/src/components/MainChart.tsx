@@ -4,7 +4,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,6 +16,7 @@ interface Props {
   chart: ChartData | null;
   forecast: ForecastResult | null;
   loading?: boolean;
+  large?: boolean;
 }
 
 function parseIso(iso: string): Date {
@@ -28,7 +28,7 @@ function isWeekendDate(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
-const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
+const MainChart: React.FC<Props> = ({ chart, forecast, loading, large }) => {
   const { data, yDomain } = useMemo(() => {
     if (!chart) return { data: [], yDomain: [0, 1] as [number, number] };
 
@@ -36,7 +36,6 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
       const dt = parseIso(p.date);
       return {
         date: dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
-        dateIso: p.date,
         isWeekend: p.is_weekend || isWeekendDate(dt),
         rate: p.rate,
         sma: p.sma_20 ?? undefined,
@@ -53,7 +52,6 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
         const dt = parseIso(p.date);
         return {
           date: dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
-          dateIso: p.date,
           isWeekend: isWeekendDate(dt),
           rate: undefined as number | undefined,
           sma: undefined,
@@ -72,7 +70,6 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
       if (p.sma_20 != null) values.push(p.sma_20);
       if (p.ema_20 != null) values.push(p.ema_20);
     });
-    values.push(chart.levels.support, chart.levels.resistance);
     forecast?.forecast.forEach((p) => {
       values.push(p.predicted_value);
       if (p.lower != null) values.push(p.lower);
@@ -88,35 +85,26 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
     const span = yMax - yMin || yMin * 0.02 || 0.1;
     const pad = Math.max(span * 0.06, 0.015);
 
-    return {
-      data: rows,
-      yDomain: [yMin - pad, yMax + pad] as [number, number],
-    };
+    return { data: rows, yDomain: [yMin - pad, yMax + pad] as [number, number] };
   }, [chart, forecast]);
 
   if (loading) return <div className="loading">Загрузка графика…</div>;
   if (!chart) return null;
+
+  const height = large ? 480 : 360;
 
   return (
     <div className="chart-card glass-card">
       <div className="chart-header">
         <div className="chart-header__pair">{PAIR_LABELS[chart.pair]}</div>
         <span className="chart-y-hint">
-          Ось Y: {yDomain[0].toFixed(4)} — {yDomain[1].toFixed(4)}
+          Y: {yDomain[0].toFixed(4)} — {yDomain[1].toFixed(4)}
         </span>
       </div>
-      <ResponsiveContainer width="100%" height={360}>
+      <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: "#9aa8bc", fontSize: 11 }}
-            interval="preserveStartEnd"
-            tickFormatter={(label, index) => {
-              const row = data[index];
-              return row?.isWeekend ? `·${label}` : label;
-            }}
-          />
+          <XAxis dataKey="date" tick={{ fill: "#9aa8bc", fontSize: 11 }} interval="preserveStartEnd" />
           <YAxis
             tick={{ fill: "#9aa8bc", fontSize: 11 }}
             domain={yDomain}
@@ -135,24 +123,12 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
               name,
             ]}
           />
-          <ReferenceLine
-            y={chart.levels.support}
-            stroke="#4ade80"
-            strokeDasharray="4 4"
-            label={{ value: "Support", fill: "#4ade80", fontSize: 10 }}
-          />
-          <ReferenceLine
-            y={chart.levels.resistance}
-            stroke="#f87171"
-            strokeDasharray="4 4"
-            label={{ value: "Resistance", fill: "#f87171", fontSize: 10 }}
-          />
           <Line
             type="monotone"
             dataKey="rate"
             name="Курс"
-            stroke="#60a5fa"
-            strokeWidth={2}
+            stroke="#3dd6c3"
+            strokeWidth={2.5}
             dot={false}
             connectNulls={false}
           />
@@ -169,7 +145,7 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
             type="monotone"
             dataKey="ema"
             name="EMA(20)"
-            stroke="#3dd6c3"
+            stroke="#fbbf24"
             strokeWidth={1.5}
             dot={false}
             connectNulls={false}
@@ -178,7 +154,7 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
             type="monotone"
             dataKey="forecast"
             name="Прогноз"
-            stroke="#fbbf24"
+            stroke="#e2e8f0"
             strokeWidth={2}
             strokeDasharray="6 3"
             dot={false}
@@ -189,7 +165,7 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
             dataKey="upper"
             stackId="band"
             stroke="none"
-            fill="rgba(96,165,250,0.1)"
+            fill="rgba(61,214,195,0.08)"
             connectNulls={false}
           />
           <Area
@@ -197,16 +173,16 @@ const MainChart: React.FC<Props> = ({ chart, forecast, loading }) => {
             dataKey="lower"
             stackId="band"
             stroke="none"
-            fill="rgba(96,165,250,0.1)"
+            fill="rgba(61,214,195,0.08)"
             connectNulls={false}
           />
         </ComposedChart>
       </ResponsiveContainer>
       <div className="legend">
-        <span className="rate">Курс (рабочие дни)</span>
-        <span className="sma">SMA(20)</span>
-        <span className="ema">EMA(20)</span>
-        <span className="forecast">Прогноз (выходные = последний рабочий)</span>
+        <span className="rate">Курс</span>
+        <span className="sma">SMA</span>
+        <span className="ema">EMA</span>
+        <span className="forecast">Прогноз</span>
       </div>
     </div>
   );

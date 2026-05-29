@@ -1,9 +1,17 @@
 import React from "react";
 import Converter from "../components/Converter";
+import GoldCalculator from "../components/GoldCalculator";
+import HistoryWidget from "../components/HistoryWidget";
 
 const ConverterPage: React.FC = () => (
-  <div style={{ padding: "1.5rem 2rem", maxWidth: 480 }}>
-    <Converter />
+  <div className="converter-page">
+    <div className="tools-grid">
+      <Converter />
+      <GoldCalculator />
+    </div>
+    <div style={{ maxWidth: 420, margin: "0 2rem 2rem" }}>
+      <HistoryWidget />
+    </div>
   </div>
 );
 

@@ -5,9 +5,11 @@ import type {
   CurrencyCode,
   CurrencyPair,
   CurrencyRate,
+  BankRatesTable,
   DashboardResponse,
   ForecastMethod,
   ForecastResult,
+  GoldCalcResult,
   MacroPanel,
   ModelMetrics,
   PeriodPreset,
@@ -55,6 +57,21 @@ export const currencyApi = {
 
   getChart: async (pair: CurrencyPair, period: PeriodPreset): Promise<ChartData> => {
     const { data } = await http.get(`/pairs/${pair}/chart`, { params: { period } });
+    return data;
+  },
+
+  getMacroBelarus: async (): Promise<MacroPanel> => {
+    const { data } = await http.get("/macro/belarus");
+    return data;
+  },
+
+  getBankRates: async (): Promise<BankRatesTable> => {
+    const { data } = await http.get("/banks/minsk");
+    return data;
+  },
+
+  calcGold: async (amount: number, currency: string): Promise<GoldCalcResult> => {
+    const { data } = await http.get("/tools/gold", { params: { amount, currency } });
     return data;
   },
 
