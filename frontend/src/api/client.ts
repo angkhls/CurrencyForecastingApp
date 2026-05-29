@@ -8,6 +8,7 @@ import type {
   DashboardResponse,
   ForecastMethod,
   ForecastResult,
+  MacroPanel,
   ModelMetrics,
   PeriodPreset,
 } from "../types";
@@ -54,6 +55,11 @@ export const currencyApi = {
 
   getChart: async (pair: CurrencyPair, period: PeriodPreset): Promise<ChartData> => {
     const { data } = await http.get(`/pairs/${pair}/chart`, { params: { period } });
+    return data;
+  },
+
+  getMacro: async (pair: CurrencyPair): Promise<MacroPanel> => {
+    const { data } = await http.get(`/pairs/${pair}/macro`);
     return data;
   },
 

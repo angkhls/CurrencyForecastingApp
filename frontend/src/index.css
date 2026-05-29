@@ -396,3 +396,113 @@ body {
 .recharts-default-tooltip {
   border-radius: 8px !important;
 }
+
+.chart-y-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.macro-panel__intro {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: -0.5rem 0 1rem;
+}
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.macro-card {
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--glass-border);
+}
+
+.macro-card__name {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.macro-card__value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.macro-card__unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.macro-card__chg {
+  font-size: 0.8rem;
+  margin-left: 0.35rem;
+}
+
+.macro-card__impact {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0.25rem;
+  line-height: 1.35;
+}
+
+.macro-card__source {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.page-single {
+  padding: 1.5rem 2rem;
+  max-width: 720px;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  padding: 1.5rem 2rem;
+}
+
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quick-links a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.quick-links a:hover {
+  text-decoration: underline;
+}
+
+.link-muted {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.macro-info section {
+  margin-bottom: 1.25rem;
+}
+
+.macro-info h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.macro-info p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

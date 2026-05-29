@@ -1,23 +1,28 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { currencyApi } from "../api/client";
 import MainChart from "../components/MainChart";
 import MetricsPanel from "../components/MetricsPanel";
 import type { ChartData, CurrencyPair, ForecastMethod, ForecastResult, PeriodPreset } from "../types";
 import { PAIR_LABELS, PERIOD_LABELS } from "../types";
 
-const PERIODS: PeriodPreset[] = ["week", "month", "year"];
+const PERIODS: PeriodPreset[] = ["week", "month", "year", "all"];
+const PAIRS: CurrencyPair[] = ["USD_BYN", "EUR_BYN", "EUR_USD"];
 
 const ForecastPage: React.FC = () => {
-  const { pair: pairParam } = useParams<{ pair: string }>();
-  const pair = (pairParam ?? "USD_BYN") as CurrencyPair;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pair = (searchParams.get("pair") as CurrencyPair) || "USD_BYN";
   const [period, setPeriod] = useState<PeriodPreset>("month");
   const [method, setMethod] = useState<ForecastMethod>("sarimax");
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(14);
   const [chart, setChart] = useState<ChartData | null>(null);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const setPair = (p: CurrencyPair) => {
+    setSearchParams({ pair: p });
+  };
 
   const load = useCallback(async () => {
     try {
@@ -43,10 +48,16 @@ const ForecastPage: React.FC = () => {
   return (
     <div className="dashboard-grid">
       <div>
-        <h2 style={{ marginTop: 0 }}>{PAIR_LABELS[pair]}</h2>
         {error && <div className="alert alert--error">{error}</div>}
         <div className="glass-card" style={{ marginBottom: "1rem" }}>
           <div className="forecast-controls">
+            <select className="select" value={pair} onChange={(e) => setPair(e.target.value as CurrencyPair)}>
+              {PAIRS.map((p) => (
+                <option key={p} value={p}>
+                  {PAIR_LABELS[p]}
+                </option>
+              ))}
+            </select>
             <div className="pill-group">
               {PERIODS.map((p) => (
                 <button
@@ -59,18 +70,39 @@ const ForecastPage: React.FC = () => {
                 </button>
               ))}
             </div>
-            <select value={method} className="select" onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
+            <select className="select" value={method} onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
               <option value="sarimax">SARIMAX</option>
               <option value="gemini">Gemini AI</option>
             </select>
-            <span>Прогноз: {days} дн.</span>
-            <input type="range" min={1} max={30} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+            <label style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              Горизонт: {days} календ. дн.
+              <input
+                type="range"
+                min={3}
+                max={30}
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+                style={{ display: "block", width: "140px" }}
+              />
+            </label>
           </div>
+          {forecast?.mape != null && forecast.mape >= 0 && (
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0.5rem 0 0" }}>
+              Backtest ({method}): MAPE {forecast.mape.toFixed(2)}%, RMSE {forecast.rmse?.toFixed(4) ?? "—"}
+            </p>
+          )}
         </div>
         <MainChart chart={chart} forecast={forecast} loading={loading} />
       </div>
       <div className="widgets-column">
         <MetricsPanel pair={pair} />
+        <div className="glass-card">
+          <h3>О прогнозе</h3>
+          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+            Модель считает только рабочие дни НБРБ. На субботу и воскресенье на графике
+            показывается значение последнего рабочего дня — торгов в выходные нет.
+          </p>
+        </div>
       </div>
     </div>
   );

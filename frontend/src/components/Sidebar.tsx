@@ -1,9 +1,5 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import type { CurrencyPair } from "../types";
-import { PAIR_LABELS } from "../types";
-
-const PAIRS: CurrencyPair[] = ["USD_BYN", "EUR_BYN", "EUR_USD"];
 
 const Sidebar: React.FC = () => (
   <aside className="sidebar">
@@ -13,26 +9,19 @@ const Sidebar: React.FC = () => (
     </div>
     <nav className="sidebar__nav">
       <NavLink to="/" end className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
-        🏠 Home
+        🏠 Главная
       </NavLink>
-      <NavLink to="/live" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
-        📈 Live Market
+      <NavLink to="/market" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
+        📊 Рынок
       </NavLink>
-      <div className="nav-group__title">AI Forecasts</div>
-      {PAIRS.map((pair) => (
-        <NavLink
-          key={pair}
-          to={`/forecast/${pair}`}
-          className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
-        >
-          🔮 {PAIR_LABELS[pair]}
-        </NavLink>
-      ))}
-      <NavLink to="/converter" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
-        🔄 Конвертер
+      <NavLink to="/forecast" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
+        🔮 Прогноз
       </NavLink>
-      <NavLink to="/history" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
-        📅 История
+      <NavLink to="/tools" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
+        🛠 Инструменты
+      </NavLink>
+      <NavLink to="/macro" className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}>
+        📚 Макро
       </NavLink>
     </nav>
   </aside>

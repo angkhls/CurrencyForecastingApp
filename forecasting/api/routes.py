@@ -12,6 +12,7 @@ from domain.models import (
     DashboardResponse,
     ForecastMethod,
     ForecastResult,
+    MacroPanel,
     ModelMetrics,
     PeriodPreset,
 )
@@ -61,6 +62,17 @@ async def get_rate_on_date(
         return await service.get_rate_on_date(currency, target_date)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/pairs/{pair}/macro", response_model=MacroPanel)
+async def get_macro(
+    pair: CurrencyPair,
+    service: RateService = Depends(get_rate_service),
+):
+    try:
+        return await service.get_macro(pair)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/pairs/{pair}/chart", response_model=ChartData)

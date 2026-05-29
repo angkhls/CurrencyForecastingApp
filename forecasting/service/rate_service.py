@@ -11,6 +11,7 @@ from domain.models import (
     DashboardResponse,
     ForecastMethod,
     ForecastResult,
+    MacroPanel,
     ModelMetrics,
     PeriodPreset,
 )
@@ -19,6 +20,13 @@ from infrastructure.nbrb_client import NbrbApiClient
 from service.forecaster import BaseForecast, SARIMAXForecaster
 from service.gemini_forecaster import GeminiForecaster
 from service.metrics_calc import mape, rmse
+from service.calendar_utils import (
+    compute_y_domain,
+    count_weekdays_after,
+    expand_forecast_to_calendar,
+    filter_weekdays,
+)
+from service.macro_service import MacroService
 from service.pairs import build_pair_series, pair_currencies, period_to_days
 from service.technical import build_chart_points
 
@@ -40,6 +48,7 @@ class RateService:
         self._gemini_key = gemini_api_key
         self._gemini_model = gemini_model
         self._sarimax = SARIMAXForecaster()
+        self._macro = MacroService()
 
     def _forecaster(self, method: ForecastMethod) -> BaseForecast:
         if method == "gemini":
@@ -165,9 +174,26 @@ class RateService:
 
     async def get_chart(self, pair: CurrencyPair, period: PeriodPreset) -> ChartData:
         days = period_to_days(period)
-        history = await self._load_pair_history(pair, days)
+        history = filter_weekdays(await self._load_pair_history(pair, days))
         points, levels = build_chart_points(history)
-        return ChartData(pair=pair, period=period, points=points, levels=levels)
+        extras: list[float] = [levels.support, levels.resistance]
+        for p in points:
+            if p.sma_20 is not None:
+                extras.append(p.sma_20)
+            if p.ema_20 is not None:
+                extras.append(p.ema_20)
+        y_min, y_max = compute_y_domain([p.rate for p in points], extras=extras)
+        return ChartData(
+            pair=pair,
+            period=period,
+            points=points,
+            levels=levels,
+            y_min=y_min,
+            y_max=y_max,
+        )
+
+    async def get_macro(self, pair: CurrencyPair) -> MacroPanel:
+        return await self._macro.get_panel(pair)
 
     def _evaluate_holdout(
         self, history: List[CurrencyRate], method: ForecastMethod, holdout: int
@@ -195,14 +221,19 @@ class RateService:
         days: int = 7,
         method: ForecastMethod = "sarimax",
     ) -> ForecastResult:
-        history = await self._load_pair_history(pair, HISTORY_DAYS)
+        history = filter_weekdays(await self._load_pair_history(pair, HISTORY_DAYS))
         if len(history) < 30:
             raise ValueError(
                 f"Недостаточно данных для прогноза: {len(history)} дней (нужно ≥30)"
             )
 
         mape_val, rmse_val = self._evaluate_holdout(history, method, HOLDOUT_DAYS)
-        forecast_points = self._forecaster(method).predict(history, days)
+        last_date = history[-1].date
+        biz_steps = max(1, count_weekdays_after(last_date, days))
+        business_forecast = self._forecaster(method).predict(history, biz_steps)
+        forecast_points = expand_forecast_to_calendar(
+            business_forecast, last_date, days
+        )
 
         return ForecastResult(
             pair=pair,

@@ -4,7 +4,8 @@ from datetime import timedelta
 from typing import List
 
 from domain.models import CurrencyRate, ForecastMethod, ForecastPoint
-from service.forecaster import BaseForecast
+from service.calendar_utils import filter_weekdays
+from service.forecaster import BaseForecast, _next_business_days
 
 try:
     import google.generativeai as genai
@@ -24,11 +25,14 @@ class GeminiForecaster(BaseForecast):
         self._model = genai.GenerativeModel(model_name)
 
     def predict(self, rates: List[CurrencyRate], days: int) -> List[ForecastPoint]:
+        business = filter_weekdays(rates)
+        if len(business) < 10:
+            business = rates
         history = [
             {"date": r.date.isoformat(), "rate": round(r.rate, 6)}
-            for r in rates[-90:]
+            for r in business[-90:]
         ]
-        last_date = rates[-1].date
+        last_date = business[-1].date
         prompt = f"""Ты финансовый аналитик. По истории официальных курсов НБРБ спрогнозируй курс на следующие {days} дней.
 
 История (последние точки):
@@ -44,12 +48,14 @@ class GeminiForecaster(BaseForecast):
         text = re.sub(r"^```json\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
         data = json.loads(text)
 
+        biz_dates = _next_business_days(last_date, days)
         return [
             ForecastPoint(
-                date=last_date + timedelta(days=i + 1),
+                date=biz_dates[i],
                 predicted_value=round(float(item["predicted_value"]), 4),
             )
             for i, item in enumerate(data[:days])
+            if i < len(biz_dates)
         ]
 
     @staticmethod

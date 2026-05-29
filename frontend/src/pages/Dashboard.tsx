@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { currencyApi } from "../api/client";
 import MainChart from "../components/MainChart";
+import MacroFactorsPanel from "../components/MacroFactorsPanel";
 import MarketPanel from "../components/MarketPanel";
-import MetricsPanel from "../components/MetricsPanel";
 import type {
   ChartData,
   CurrencyPair,
@@ -50,59 +51,76 @@ const Dashboard: React.FC = () => {
   }, [load]);
 
   return (
-    <div className="dashboard-grid">
-      <div>
-        {error && <div className="alert alert--error">{error}</div>}
-        <div className="glass-card" style={{ marginBottom: "1rem" }}>
-          <div className="forecast-controls">
-            <select className="select" value={pair} onChange={(e) => setPair(e.target.value as CurrencyPair)}>
-              {(Object.keys(PAIR_LABELS) as CurrencyPair[]).map((p) => (
-                <option key={p} value={p}>
-                  {PAIR_LABELS[p]}
-                </option>
-              ))}
-            </select>
-            <div className="pill-group">
-              {PERIODS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  className={period === p ? "pill pill--active" : "pill"}
-                  onClick={() => setPeriod(p)}
-                >
-                  {PERIOD_LABELS[p]}
-                </button>
-              ))}
+    <>
+      <div className="dashboard-grid">
+        <div>
+          {error && <div className="alert alert--error">{error}</div>}
+          <div className="glass-card" style={{ marginBottom: "1rem" }}>
+            <div className="forecast-controls">
+              <select className="select" value={pair} onChange={(e) => setPair(e.target.value as CurrencyPair)}>
+                {(Object.keys(PAIR_LABELS) as CurrencyPair[]).map((p) => (
+                  <option key={p} value={p}>
+                    {PAIR_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+              <div className="pill-group">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={period === p ? "pill pill--active" : "pill"}
+                    onClick={() => setPeriod(p)}
+                  >
+                    {PERIOD_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+              <select className="select" value={method} onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
+                <option value="sarimax">SARIMAX</option>
+                <option value="gemini">Gemini AI</option>
+              </select>
+              <label style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Прогноз: {forecastDays} дн.
+                <input
+                  type="range"
+                  min={3}
+                  max={21}
+                  value={forecastDays}
+                  onChange={(e) => setForecastDays(Number(e.target.value))}
+                  style={{ display: "block", width: "120px" }}
+                />
+              </label>
             </div>
-            <select className="select" value={method} onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
-              <option value="sarimax">SARIMAX</option>
-              <option value="gemini">Gemini AI</option>
-            </select>
-            <label style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              Прогноз: {forecastDays} дн.
-              <input
-                type="range"
-                min={1}
-                max={30}
-                value={forecastDays}
-                onChange={(e) => setForecastDays(Number(e.target.value))}
-                style={{ display: "block", width: "120px" }}
-              />
-            </label>
+            {forecast?.mape != null && forecast.mape >= 0 && (
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0.5rem 0 0" }}>
+                Точность ({method}): MAPE {forecast.mape.toFixed(2)}%
+                <Link to={`/forecast?pair=${pair}`} className="link-muted">
+                  {" "}
+                  → подробнее
+                </Link>
+              </p>
+            )}
           </div>
-          {forecast?.mape != null && (
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
-              Точность ({method}): MAPE {forecast.mape.toFixed(2)}%, RMSE {forecast.rmse?.toFixed(4) ?? "—"}
-            </p>
-          )}
+          <MainChart chart={chart} forecast={forecast} loading={loading} />
+          <div style={{ marginTop: "1rem" }}>
+            <MacroFactorsPanel pair={pair} />
+          </div>
         </div>
-        <MainChart chart={chart} forecast={forecast} loading={loading} />
+        <div className="widgets-column">
+          <MarketPanel rates={rates} loading={loading} />
+          <div className="glass-card">
+            <h3>Быстрые ссылки</h3>
+            <nav className="quick-links">
+              <Link to="/market">Все курсы →</Link>
+              <Link to="/forecast">Лаборатория прогноза →</Link>
+              <Link to="/tools">Конвертер и история →</Link>
+              <Link to="/macro">Справка по макро →</Link>
+            </nav>
+          </div>
+        </div>
       </div>
-      <div className="widgets-column">
-        <MarketPanel rates={rates} loading={loading} />
-        <MetricsPanel pair={pair} />
-      </div>
-    </div>
+    </>
   );
 };
 

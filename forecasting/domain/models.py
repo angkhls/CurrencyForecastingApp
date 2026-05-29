@@ -35,6 +35,22 @@ class ChartPoint(BaseModel):
     rate: float
     sma_20: Optional[float] = None
     ema_20: Optional[float] = None
+    is_weekend: bool = False
+
+
+class MacroIndicator(BaseModel):
+    id: str
+    name: str
+    value: float
+    unit: str
+    change_pct: Optional[float] = None
+    impact: str
+    source: str = ""
+
+
+class MacroPanel(BaseModel):
+    pair: CurrencyPair
+    indicators: List["MacroIndicator"]
 
 
 class TechnicalLevels(BaseModel):
@@ -47,6 +63,8 @@ class ChartData(BaseModel):
     period: PeriodPreset
     points: List[ChartPoint]
     levels: TechnicalLevels
+    y_min: float
+    y_max: float
 
 
 class ModelMetrics(BaseModel):

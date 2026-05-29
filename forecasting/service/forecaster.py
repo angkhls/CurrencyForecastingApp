@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import List
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from domain.models import CurrencyRate, ForecastPoint
+from service.calendar_utils import filter_weekdays
 
 # ─────────────────────────────────────────────
 # ПАТТЕРН: Strategy (Стратегия)
@@ -76,10 +77,13 @@ class SARIMAXForecaster(BaseForecast):
         # Шаг 1: строим временной ряд из истории курсов
         # pandas Series с датой в качестве индекса —
         # именно такой формат нужен SARIMAX
+        business = filter_weekdays(rates)
+        if len(business) < 20:
+            business = rates
         series = pd.Series(
-            data=[r.rate for r in rates],
-            index=pd.DatetimeIndex([r.date for r in rates]),
-            name="rate"
+            data=[r.rate for r in business],
+            index=pd.DatetimeIndex([r.date for r in business]),
+            name="rate",
         )
 
         # Шаг 2: создаём и обучаем модель
@@ -95,19 +99,32 @@ class SARIMAXForecaster(BaseForecast):
         predictions = forecast_res.predicted_mean
         conf_int = forecast_res.conf_int(alpha=0.2)
 
-        last_date = rates[-1].date
+        last_date = business[-1].date
+        forecast_dates = _next_business_days(last_date, days)
         points: list[ForecastPoint] = []
         for i, val in enumerate(predictions):
+            if i >= len(forecast_dates):
+                break
             lower = upper = None
             if conf_int is not None and len(conf_int) > i:
                 lower = round(float(conf_int.iloc[i, 0]), 4)
                 upper = round(float(conf_int.iloc[i, 1]), 4)
             points.append(
                 ForecastPoint(
-                    date=last_date + timedelta(days=i + 1),
+                    date=forecast_dates[i],
                     predicted_value=round(float(val), 4),
                     lower=lower,
                     upper=upper,
                 )
             )
         return points
+
+
+def _next_business_days(from_date: date, n: int) -> list[date]:
+    out: list[date] = []
+    d = from_date
+    while len(out) < n:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            out.append(d)
+    return out

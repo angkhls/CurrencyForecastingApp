@@ -29,6 +29,7 @@ export interface ChartPoint {
   rate: number;
   sma_20?: number | null;
   ema_20?: number | null;
+  is_weekend?: boolean;
 }
 
 export interface ChartData {
@@ -36,6 +37,23 @@ export interface ChartData {
   period: PeriodPreset;
   points: ChartPoint[];
   levels: { support: number; resistance: number };
+  y_min: number;
+  y_max: number;
+}
+
+export interface MacroIndicator {
+  id: string;
+  name: string;
+  value: number;
+  unit: string;
+  change_pct?: number | null;
+  impact: string;
+  source: string;
+}
+
+export interface MacroPanel {
+  pair: CurrencyPair;
+  indicators: MacroIndicator[];
 }
 
 export interface ModelMetrics {

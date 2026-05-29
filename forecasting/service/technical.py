@@ -36,6 +36,7 @@ def build_chart_points(rates: List[CurrencyRate]) -> Tuple[List[ChartPoint], Tec
             rate=r.rate,
             sma_20=round(float(sma.iloc[i]), 4) if pd.notna(sma.iloc[i]) else None,
             ema_20=round(float(ema.iloc[i]), 4) if pd.notna(ema.iloc[i]) else None,
+            is_weekend=r.date.weekday() >= 5,
         )
         for i, r in enumerate(rates)
     ]
